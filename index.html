@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLUSTER 2026 - Gate Scanner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- HTML5 QR Code Scanner Library -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body { background-color: #0d0d11; color: #ffffff; font-family: sans-serif; }
+    .gold-border { border: 2px solid #FFD700; }
+  </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+  <div class="w-full max-w-md bg-zinc-900 rounded-2xl p-6 gold-border text-center shadow-2xl">
+    <h1 class="text-2xl font-bold text-yellow-400 mb-1">CLUSTER 2026</h1>
+    <p class="text-xs text-gray-400 mb-4">GATE CHECK-IN SCANNER</p>
+
+    <!-- Camera Scanner Screen -->
+    <div id="reader" class="overflow-hidden rounded-xl bg-black border border-zinc-700 mb-4 min-h-[250px]"></div>
+
+    <!-- Scan Status Result Box -->
+    <div id="resultBox" class="hidden p-4 rounded-xl text-center font-bold text-sm"></div>
+
+    <button onclick="restartScanner()" id="resetBtn" class="hidden w-full py-3 mt-4 bg-yellow-500 text-black font-bold rounded-xl uppercase tracking-wider">
+      Scan Next Ticket 📷
+    </button>
+  </div>
+
+  <script>
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzL0pnFHZNUR5ATOhFIMCHKf1pmDv0ehq7YeVb8RJW3QkBCrmXXe0WTaS316_yQtd0oFQ/exec";
+
+    let html5QrCode;
+
+    function onScanSuccess(decodedText, decodedResult) {
+      if (html5QrCode) {
+        html5QrCode.stop(); // Stop camera feed once scanned
+      }
+      
+      const resultBox = document.getElementById('resultBox');
+      resultBox.classList.remove('hidden');
+      resultBox.className = "p-4 rounded-xl text-center font-bold text-sm bg-yellow-500/20 text-yellow-400 border border-yellow-500 animate-pulse";
+      resultBox.innerText = "Verifying Ticket ID: " + decodedText + " ... ⏳";
+
+      // Send Verification Request to Apps Script
+      fetch(`${WEB_APP_URL}?ticketId=${encodeURIComponent(decodedText)}`, {
+        method: "GET",
+        mode: "cors"
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.result === "success") {
+            resultBox.className = "p-4 rounded-xl text-center font-bold text-base bg-green-500/20 text-green-400 border border-green-500";
+            resultBox.innerHTML = `<div>${data.message}</div><div class="text-xs text-white mt-1">Name: ${data.name} (${data.regNo})</div>`;
+          } else if (data.result === "already_used") {
+            resultBox.className = "p-4 rounded-xl text-center font-bold text-base bg-amber-500/20 text-amber-400 border border-amber-500";
+            resultBox.innerHTML = `<div>${data.message}</div><div class="text-xs text-white mt-1">Checked-In By: ${data.name} (${data.regNo})</div>`;
+          } else {
+            resultBox.className = "p-4 rounded-xl text-center font-bold text-base bg-red-500/20 text-red-400 border border-red-500";
+            resultBox.innerText = data.message || "❌ INVALID TICKET!";
+          }
+          document.getElementById('resetBtn').classList.remove('hidden');
+        })
+        .catch(err => {
+          resultBox.className = "p-4 rounded-xl text-center font-bold text-base bg-red-500/20 text-red-400 border border-red-500";
+          resultBox.innerText = "Connection Error! Check Web App URL or Internet.";
+          document.getElementById('resetBtn').classList.remove('hidden');
+        });
+    }
+
+    function startScanner() {
+      html5QrCode = new Html5Qrcode("reader");
+      
+      // Directly targets the back camera
+      const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+
+      html5QrCode.start(
+        { facingMode: "environment" }, 
+        config, 
+        onScanSuccess
+      ).catch(err => {
+        console.error("Camera access error:", err);
+        const resultBox = document.getElementById('resultBox');
+        resultBox.classList.remove('hidden');
+        resultBox.className = "p-4 rounded-xl text-center font-bold text-sm bg-red-500/20 text-red-400 border border-red-500";
+        resultBox.innerText = "Camera could not be accessed. Please check camera permissions.";
+      });
+    }
+
+    function restartScanner() {
+      document.getElementById('resultBox').classList.add('hidden');
+      document.getElementById('resetBtn').classList.add('hidden');
+      startScanner();
+    }
+
+    // Auto-start scanner when page loads
+    window.addEventListener('DOMContentLoaded', startScanner);
+  </script>
+</body>
+</html>
